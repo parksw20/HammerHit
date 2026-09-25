@@ -1,7 +1,7 @@
 // 알파벳 26자. 단어장(words.js)과 같은 형태라서 같은 엔진·문제 생성기로 돌아간다.
 // - shape: 모양이 헷갈리는 글자 (대문자·소문자 짝 찾기에서 오답으로 우선 출제)
 // - sound: 이름 소리가 헷갈리는 글자 (알파벳 소리 듣기에서 오답으로 우선 출제)
-// - say: TTS로 읽을 텍스트 (없으면 대문자 그대로 읽는다)
+// - say: TTS로 읽을 텍스트 (글자 이름만 읽히도록 소문자)
 (function (root, factory) {
   const mod = factory();
   if (typeof module === 'object' && module.exports) module.exports = mod;
@@ -35,6 +35,8 @@
     id: 'letter:' + upper,
     en: upper,
     lower: upper.toLowerCase(),
+    // 대문자 한 글자를 TTS에 넘기면 "capital A"처럼 읽으므로 소문자로 읽힌다
+    say: upper.toLowerCase(),
     ko,
     emoji,
     example,

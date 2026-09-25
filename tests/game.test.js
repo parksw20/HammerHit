@@ -257,7 +257,8 @@ test('대소문자: 프롬프트와 팻말은 서로 다른 대소문자, 모양
 test('알파벳 소리: 글자 이름을 읽고, 소리가 비슷한 글자가 오답으로', () => {
   const rng = seeded(8);
   const q = createQuestion('letterSound', L('B'), LETTERS, 3, { rng, similarity: 1 });
-  assert.equal(q.speakText, 'B');
+  assert.equal(q.speakText, 'b'); // 대문자는 TTS가 "capital B"로 읽는다
+  assert.ok(LETTERS.every((w) => w.say === w.lower));
   assert.ok(q.distractors.every((d) => L('B').sound.includes(d.id)));
 });
 
