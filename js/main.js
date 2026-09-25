@@ -77,11 +77,24 @@
     listenBtn.querySelector('small').textContent = '이 브라우저는 음성을 지원하지 않아요';
   }
 
-  $('btn-reset').addEventListener('click', () => {
-    if (!confirm('단어별 학습 기록과 최고 점수를 모두 지울까요?')) return;
+  // confirm()은 임베드 환경에서 막힐 수 있으므로 "한 번 더 누르기"로 확인한다
+  let resetArmed = null;
+  const resetBtn = $('btn-reset');
+  resetBtn.addEventListener('click', () => {
+    if (!resetArmed) {
+      resetBtn.textContent = '정말 지울까요? 한 번 더 누르면 초기화돼요';
+      resetArmed = setTimeout(() => {
+        resetArmed = null;
+        resetBtn.textContent = '학습 기록 초기화';
+      }, 3000);
+      return;
+    }
+    clearTimeout(resetArmed);
+    resetArmed = null;
     progress.reset();
     Object.keys(best).forEach((k) => delete best[k]);
     saveJson('hammerhit.best.v1', best);
+    resetBtn.textContent = '초기화했어요';
     renderChoices();
   });
 
