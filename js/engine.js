@@ -12,6 +12,8 @@
     1: { stay: [3.2, 2.0], moles: [2, 3], similarity: [0, 0.3] },
     2: { stay: [2.8, 1.7], moles: [2, 4], similarity: [0.2, 0.6] },
     3: { stay: [2.4, 1.5], moles: [3, 5], similarity: [0.5, 1] },
+    // 알파벳: 글자 하나라 읽기는 빠르지만, 처음 배우는 아이들이라 여유 있게
+    abc: { stay: [4.0, 2.5], moles: [2, 4], similarity: [0.3, 0.8] },
   };
 
   const SCORE_CORRECT = 100;
@@ -19,6 +21,7 @@
   const GAP_AFTER_HIT = 0.45;   // 정답 후 다음 문제까지
   const GAP_AFTER_FAIL = 1.1;   // 오답/시간초과 후 정답을 보여주는 시간
   const RECENT_SIZE = 3;
+  const COMPLETE_BONUS_PER_SEC = 10; // 순서대로 모드 완주 시 남은 1초당 보너스
 
   const lerp = (a, b, t) => a + (b - a) * t;
 
@@ -34,6 +37,7 @@
       this.words = opts.words;
       this.pool = opts.pool && opts.pool.length ? opts.pool : opts.words;
       this.mode = opts.mode || 'meaning';
+      this.sequence = !!(Q.MODES[this.mode] && Q.MODES[this.mode].sequence);
       this.level = LEVELS[opts.level] ? opts.level : 1;
       this.duration = opts.duration || 60;
       this.holeCount = opts.holeCount || 9;
@@ -55,6 +59,9 @@
       this.gap = 0;            // 다음 문제까지 남은 대기 시간
       this.recent = [];
       this.results = [];       // { word, correct, reason }
+      this.seqIndex = 0;       // 순서대로 모드: 다음에 쳐야 할 위치
+      this.completed = false;  // 순서대로 모드: 끝까지 다 쳤는지
+      this.bonus = 0;
     }
 
     get remaining() {
@@ -103,21 +110,27 @@
       }
       if (this.gap > 0) {
         this.gap -= dt;
-        if (this.gap <= 0) this.nextQuestion();
+        if (this.gap <= 0) this.completed ? this.end() : this.nextQuestion();
       }
     }
 
     nextQuestion() {
       const diff = this.difficulty();
-      const answer = Q.pickAnswer(this.pool, { rng: this.rng, progress: this.progress, recent: this.recent });
-      const question = Q.createQuestion(this.mode, answer, this.words, diff.moles - 1,
-        { rng: this.rng, similarity: diff.similarity });
+      const answer = this.sequence
+        ? this.pool[this.seqIndex]
+        : Q.pickAnswer(this.pool, { rng: this.rng, progress: this.progress, recent: this.recent });
+      const question = Q.createQuestion(this.mode, answer, this.words, diff.moles - 1, {
+        rng: this.rng,
+        similarity: diff.similarity,
+        sequence: this.pool,
+        sequenceIndex: this.seqIndex,
+      });
 
       const moleWords = [answer].concat(question.distractors);
       const slots = Q.shuffle(this.holes.map((_, i) => i), this.rng);
       this.holes.fill(null);
       moleWords.forEach((word, i) => {
-        this.holes[slots[i]] = { word, isAnswer: word.id === answer.id };
+        this.holes[slots[i]] = { word, label: Q.labelFor(word, question.display), isAnswer: word.id === answer.id };
       });
       question.answerIndex = slots[0];
       question.stay = diff.stay;
@@ -142,11 +155,23 @@
       this.record(question.answer, true, 'hit');
       this.finishQuestion(GAP_AFTER_HIT);
       this.emit('hit', { index, question, gained, combo: this.combo });
+
+      if (this.sequence) {
+        this.seqIndex += 1;
+        if (this.seqIndex >= this.pool.length) {
+          this.completed = true;
+          this.bonus = Math.ceil(this.remaining) * COMPLETE_BONUS_PER_SEC;
+          this.score += this.bonus;
+          this.gap = GAP_AFTER_FAIL; // 마지막 타격 애니메이션을 보여준 뒤 종료
+          this.emit('complete', { bonus: this.bonus });
+        }
+      }
       return { correct: true, gained };
     }
 
     // 오답을 치거나 시간이 지나면 문제를 끝내고 정답을 보여준다.
     // (오답 후에도 정답을 칠 수 있게 하면 "아무거나 연타"가 유리해지므로 막는다)
+    // 순서대로 모드에서는 seqIndex가 그대로라 같은 글자를 다시 낸다.
     fail(index, reason) {
       const question = this.question;
       const lost = reason === 'wrong' ? Math.min(this.score, -SCORE_WRONG) : 0;
@@ -193,6 +218,8 @@
         accuracy: total ? correct / total : 0,
         maxCombo: this.maxCombo,
         wrongWords,
+        completed: this.completed,
+        bonus: this.bonus,
       };
     }
   }

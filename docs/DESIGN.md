@@ -9,7 +9,7 @@
 | 대상 | 초등학생 (Level 1~3로 난이도 분리) |
 | 플랫폼 | 웹 브라우저 (PC · 태블릿 · 모바일), 설치·빌드 없이 `index.html` 실행 |
 | 사용 맥락 | 자습 + 수업 활동 겸용 |
-| MVP 모드 | 뜻 찾기, 듣고 찾기 |
+| 모드 | **ABC 단계**: 순서대로 ABC, 대문자·소문자, 알파벳 소리 / **단어 단계**: 뜻 찾기, 듣고 찾기 |
 
 ## 2. 핵심 아이디어
 
@@ -21,6 +21,19 @@
 |---|---|---|---|
 | 뜻 찾기 | `사과` | apple / banana / grape | 어휘 (한→영), 철자 인식 |
 | 듣고 찾기 | 🔊 "apple" (브라우저 TTS) | apple / banana / grape | 듣기, 발음–철자 연결 |
+
+### ABC 단계 (알파벳을 처음 배우는 아이용, 메뉴 기본값)
+
+| 놀이 | 문제 | 두더지 팻말 | 오답 선정 |
+|---|---|---|---|
+| 🔢 순서대로 ABC | `B C D _` (앞 글자 3개) | E / F / C | 바로 앞뒤 ±2 글자 → 순서를 알아야 풀 수 있음 |
+| 🔠 대문자·소문자 | `B` (또는 `b`) | b / d / p (또는 B / D / P) | 모양이 비슷한 글자 (b d p q, m n u w, i j l …) |
+| 🔊 알파벳 소리 | 🔊 "B" (글자 이름) | B / P / V (대·소문자 무작위) | 소리가 비슷한 글자 (B C D E G P T V Z, A H J K, L R …) |
+
+- 범위: A~M / N~Z / A~Z
+- **순서대로 ABC**는 틀리거나 놓치면 같은 글자를 다시 낸다. 끝까지 치면 라운드가 끝나고 남은 1초당 10점 보너스를 준다 (제한 시간 90초).
+- 맞히거나 틀리면 글자 이름을 읽어주고 `B b · 🐻 bear`처럼 예시 단어를 보여준다.
+- 파닉스 소리(/b/)는 브라우저 TTS로 정확히 낼 수 없어서 글자 이름(bee)만 다룬다. 녹음 파일을 넣으면 확장할 수 있다.
 
 ## 3. 게임 루프
 
@@ -45,6 +58,7 @@
 | 1 | 동물·과일·색·숫자 | 3.2 → 2.0초 | 2 → 3 | 0 → 30% |
 | 2 | 몸·학교·자연·탈것 | 2.8 → 1.7초 | 2 → 4 | 20 → 60% |
 | 3 | 동사·형용사·장소 | 2.4 → 1.5초 | 3 → 5 | 50 → 100% |
+| ABC | 알파벳 | 4.0 → 2.5초 | 2 → 4 | 30 → 80% |
 
 머무는 시간의 하한은 **단어를 읽는 데 필요한 시간(1.5초)** 이다. 이보다 빠르면 읽지 않고 찍게 된다.
 
@@ -61,6 +75,7 @@
 index.html            화면 3개 (메뉴 / 게임 / 결과)
 css/style.css         두더지·구멍은 CSS로 그림 (이미지 파일 없음)
 js/words.js           단어장 데이터
+js/letters.js         알파벳 26자 + 모양/소리가 헷갈리는 글자 묶음
 js/questions.js       QuestionGenerator: 정답 선택, 오답 선정, 모드별 문제 생성
 js/progress.js        Progress: 단어별 숙련도, localStorage 저장 (실패해도 동작)
 js/engine.js          GameEngine: 타이머, 스폰, 판정, 점수, 콤보 (DOM 없음)
@@ -79,8 +94,13 @@ tests/game.test.js    Node 내장 테스트 러너로 로직 검증
 // words.js
 { id: 'sheep', en: 'sheep', ko: '양', emoji: '🐑', category: 'animal', level: 1, confusables: ['ship'] }
 
+// letters.js
+{ id: 'letter:B', en: 'B', lower: 'b', ko: '비', emoji: '🐻', example: 'bear', order: 1,
+  shape: ['letter:D', 'letter:P', ...], sound: ['letter:P', 'letter:V', ...] }
+
 // Question (questions.js → engine.js)
-{ mode, answer, distractors, prompt, speak, answerIndex, stay }
+{ mode, answer, distractors, prompt, hint, speakText, speak, display, answerIndex, stay }
+// display: 팻말 표기 ('en' | 'upper' | 'lower') → 엔진이 각 두더지에 label로 붙인다
 
 // Progress (localStorage 'hammerhit.progress.v1')
 { [wordId]: { seen, correct, mastery, lastSeen } }
@@ -96,8 +116,9 @@ tests/game.test.js    Node 내장 테스트 러너로 로직 검증
 
 ## 8. 로드맵
 
+- [x] **v0.2**: ABC 단계 (순서대로 ABC, 대문자·소문자, 알파벳 소리)
 - [x] **v0.1 (MVP)**: 3×3 보드, 뜻 찾기·듣고 찾기, 레벨 3단계, 콤보, 난이도 곡선, 효과음, 오답 노트, 복습 라운드, 숙련도 저장
-- [ ] v0.2: 그림 매칭 · 스펠링(`ap_le`) · 품사 분류 모드
+- [ ] 다음: 파닉스(녹음 파일), 그림 매칭 · 스펠링(`ap_le`) · 품사 분류 모드
 - [ ] v0.3: 특수 두더지 (⭐ 황금 ×3, 💣 폭탄, ⏱ +5초)
 - [ ] v0.4: 교사용 단어장 편집 (CSV 붙여넣기 / 업로드)
 - [ ] v1.0: 반별 랭킹, 학습 리포트

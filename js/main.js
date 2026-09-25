@@ -1,8 +1,9 @@
 // 화면(메뉴/게임/결과)과 입력 처리. 게임 규칙은 전부 engine.js에 있다.
 (function () {
-  const { WORDS, GameEngine, Progress, Sfx, Speech } = window.HH;
+  const { WORDS, RANGES, lettersInRange, GameEngine, Progress, Sfx, Speech, sayOf } = window.HH;
 
   const ROUND_SECONDS = 60;
+  const SEQUENCE_SECONDS = 90;
   const REVIEW_SECONDS = 45;
   // 숫자패드 배치 그대로: 7 8 9 / 4 5 6 / 1 2 3
   const KEYMAP = { 7: 0, 8: 1, 9: 2, 4: 3, 5: 4, 6: 5, 1: 6, 2: 7, 3: 8 };
@@ -30,10 +31,16 @@
     try { storage.setItem(key, JSON.stringify(value)); } catch (e) { /* 무시 */ }
   }
 
-  const settings = Object.assign({ mode: 'meaning', level: 1, muted: false }, loadJson('hammerhit.settings.v1', {}));
+  const settings = Object.assign(
+    { track: 'abc', abcMode: 'sequence', range: 'am', mode: 'meaning', level: 1, muted: false },
+    loadJson('hammerhit.settings.v1', {}));
   if (!Speech.available && settings.mode === 'listen') settings.mode = 'meaning';
+  if (!Speech.available && settings.abcMode === 'letterSound') settings.abcMode = 'case';
   const best = loadJson('hammerhit.best.v1', {});
-  const bestKey = () => settings.mode + ':' + settings.level;
+  const isAbc = () => settings.track === 'abc';
+  const bestKey = () => (isAbc()
+    ? `abc:${settings.abcMode}:${settings.range}`
+    : settings.mode + ':' + settings.level);
 
   let engine = null;
   let round = null;        // { review, pool }
@@ -54,10 +61,18 @@
         btn.classList.toggle('selected', String(settings[key]) === btn.dataset.value);
       });
     });
-    const levelIds = WORDS.filter((w) => w.level === settings.level).map((w) => w.id);
+    $('menu-abc').hidden = !isAbc();
+    $('menu-words').hidden = isAbc();
     const record = best[bestKey()] || 0;
-    $('menu-stats').textContent =
-      `Level ${settings.level} 단어 ${levelIds.length}개 중 ${progress.masteredCount(levelIds)}개 마스터 ⭐ · 최고 점수 ${record}`;
+    if (isAbc()) {
+      const ids = lettersInRange(settings.range).map((w) => w.id);
+      $('menu-stats').textContent =
+        `${RANGES[settings.range].label} ${ids.length}글자 중 ${progress.masteredCount(ids)}개 마스터 ⭐ · 최고 점수 ${record}`;
+    } else {
+      const ids = WORDS.filter((w) => w.level === settings.level).map((w) => w.id);
+      $('menu-stats').textContent =
+        `Level ${settings.level} 단어 ${ids.length}개 중 ${progress.masteredCount(ids)}개 마스터 ⭐ · 최고 점수 ${record}`;
+    }
   }
 
   document.querySelectorAll('.choices').forEach((group) => {
@@ -72,9 +87,10 @@
   });
 
   if (!Speech.available) {
-    const listenBtn = document.querySelector('[data-choice="mode"] [data-value="listen"]');
-    listenBtn.disabled = true;
-    listenBtn.querySelector('small').textContent = '이 브라우저는 음성을 지원하지 않아요';
+    document.querySelectorAll('[data-value="listen"], [data-value="letterSound"]').forEach((btn) => {
+      btn.disabled = true;
+      btn.querySelector('small').textContent = '이 브라우저는 음성을 지원하지 않아요';
+    });
   }
 
   // confirm()은 임베드 환경에서 막힐 수 있으므로 "한 번 더 누르기"로 확인한다
@@ -132,6 +148,7 @@
   }
 
   function describe(word) {
+    if (word.lower) return `${word.en} ${word.lower} · ${word.emoji} ${word.example}`;
     return `${word.en} ${word.emoji} (${word.ko})`;
   }
 
@@ -158,18 +175,18 @@
         p.holes.forEach((mole, i) => {
           if (!mole) return;
           const sign = holeEls[i].querySelector('.sign');
-          sign.textContent = mole.word.en;
-          sign.classList.toggle('long', mole.word.en.length > 6);
+          sign.textContent = mole.label;
+          sign.classList.toggle('long', mole.label.length > 6);
+          sign.classList.toggle('letter', mole.label.length === 1);
           holeEls[i].querySelector('.mole').style.transitionDelay = Math.round(Math.random() * 150) + 'ms';
           holeEls[i].classList.add('up');
         });
         const q = p.question;
-        const listen = q.mode === 'listen';
-        $('prompt-label').textContent = listen ? '잘 듣고 맞는 단어를 때려!' : '이 뜻의 영어 단어는?';
-        $('prompt').textContent = listen ? '🔊' : q.prompt;
-        $('btn-replay').classList.toggle('hidden', !listen);
+        $('prompt-label').textContent = q.hint;
+        $('prompt').textContent = q.prompt;
+        $('btn-replay').classList.toggle('hidden', !q.speak);
         setFeedback('');
-        if (q.speak) Speech.speak(q.prompt);
+        if (q.speak) Speech.speak(q.speakText);
         break;
       }
 
@@ -181,7 +198,7 @@
         const milestone = p.combo === 3 || p.combo % 5 === 0;
         (milestone ? Sfx.combo : Sfx.hit)();
         setFeedback('⭕ ' + describe(p.question.answer), 'good');
-        if (p.question.mode === 'meaning') Speech.speak(p.question.answer.en);
+        if (!p.question.speak) Speech.speak(sayOf(p.question.answer));
         popCombo();
         break;
       }
@@ -204,7 +221,7 @@
           Sfx.miss();
           setFeedback('⏰ 정답은 ' + describe(p.question.answer), 'bad');
         }
-        Speech.speak(p.question.answer.en);
+        Speech.speak(sayOf(p.question.answer));
         break;
       }
 
@@ -215,6 +232,10 @@
 
       case 'resume':
         $('pause-overlay').classList.add('hidden');
+        break;
+
+      case 'complete':
+        setFeedback(`🎉 끝까지 완주! 시간 보너스 +${p.bonus}`, 'good');
         break;
 
       case 'end':
@@ -254,19 +275,33 @@
   }
 
   // ── 라운드 ───────────────────────────
-  function startRound(review) {
-    const words = WORDS.filter((w) => w.level <= settings.level);
-    const pool = review ? lastSummary.wrongWords : WORDS.filter((w) => w.level === settings.level);
-    round = { review, pool };
-    engine = new GameEngine({
-      words,
-      pool,
+  function roundConfig(review) {
+    if (isAbc()) {
+      const letters = lettersInRange(settings.range);
+      const sequence = settings.abcMode === 'sequence';
+      // 순서대로 모드의 복습은 틀린 글자만 알파벳 순서로 다시 친다
+      const pool = review ? lastSummary.wrongWords.slice().sort((a, b) => a.order - b.order) : letters;
+      return {
+        words: letters,
+        pool,
+        mode: settings.abcMode,
+        level: 'abc',
+        duration: review ? REVIEW_SECONDS : (sequence ? SEQUENCE_SECONDS : ROUND_SECONDS),
+      };
+    }
+    return {
+      words: WORDS.filter((w) => w.level <= settings.level),
+      pool: review ? lastSummary.wrongWords : WORDS.filter((w) => w.level === settings.level),
       mode: settings.mode,
       level: settings.level,
       duration: review ? REVIEW_SECONDS : ROUND_SECONDS,
-      progress,
-      onEvent,
-    });
+    };
+  }
+
+  function startRound(review) {
+    const cfg = roundConfig(review);
+    round = { review, pool: cfg.pool };
+    engine = new GameEngine(Object.assign(cfg, { progress, onEvent }));
     Sfx.unlock();
     $('pause-overlay').classList.add('hidden');
     showScreen('game');
@@ -293,7 +328,9 @@
       saveJson('hammerhit.best.v1', best);
     }
 
-    $('result-title').textContent = round.review ? '복습 완료!' : '라운드 종료!';
+    $('result-title').textContent = summary.completed
+      ? `🎉 완주! 시간 보너스 +${summary.bonus}`
+      : (round.review ? '복습 완료!' : '라운드 종료!');
     $('result-score').textContent = summary.score;
     $('result-best').classList.toggle('hidden', !isBest);
     $('result-accuracy').textContent = Math.round(summary.accuracy * 100) + '%';
@@ -313,9 +350,9 @@
       li.innerHTML = '<span class="emoji"></span><span class="en"></span><span class="ko"></span>' +
         '<button class="say" aria-label="발음 듣기">🔊</button>';
       li.querySelector('.emoji').textContent = word.emoji;
-      li.querySelector('.en').textContent = word.en;
-      li.querySelector('.ko').textContent = word.ko;
-      li.querySelector('.say').addEventListener('click', () => Speech.speak(word.en));
+      li.querySelector('.en').textContent = word.lower ? `${word.en} ${word.lower}` : word.en;
+      li.querySelector('.ko').textContent = word.lower ? `${word.ko} · ${word.example}` : word.ko;
+      li.querySelector('.say').addEventListener('click', () => Speech.speak(sayOf(word)));
       list.appendChild(li);
     });
 
@@ -339,7 +376,7 @@
       engine.hit(KEYMAP[e.key]);
     } else if (e.key === ' ') {
       e.preventDefault();
-      if (engine.question && engine.question.speak) Speech.speak(engine.question.prompt);
+      if (engine.question && engine.question.speak) Speech.speak(engine.question.speakText);
     } else if (e.key === 'Escape') {
       engine.state === 'paused' ? engine.resume() : engine.pause();
     }
@@ -362,7 +399,7 @@
   $('btn-resume').addEventListener('click', () => engine && engine.resume());
   $('btn-quit').addEventListener('click', quitRound);
   $('btn-replay').addEventListener('click', () => {
-    if (engine && engine.question) Speech.speak(engine.question.prompt);
+    if (engine && engine.question && engine.question.speak) Speech.speak(engine.question.speakText);
   });
   $('btn-mute').addEventListener('click', () => {
     settings.muted = !settings.muted;

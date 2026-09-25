@@ -63,6 +63,13 @@ button { font: inherit; cursor: pointer; border: 0; }
 }
 .choices button small { font-weight: 500; font-size: .78rem; color: #7a6f60; }
 .choices button.selected { border-color: var(--accent); background: #fff1e8; }
+.choices.three { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 520px) {
+  .choices.three.stack { grid-template-columns: 1fr; }
+  .choices.three.stack button { flex-direction: row; justify-content: center; gap: 8px; flex-wrap: wrap; }
+}
+.tracks { margin-bottom: 12px; }
+.tracks button { font-size: 1.1rem; padding: 14px 8px; box-shadow: 0 4px 0 rgba(0, 0, 0, .12); }
 .choices button:disabled { opacity: .45; cursor: not-allowed; }
 
 .primary, .secondary {
@@ -185,6 +192,7 @@ button { font: inherit; cursor: pointer; border: 0; }
   box-shadow: 0 3px 0 rgba(0, 0, 0, .25);
 }
 .mole .sign.long { font-size: clamp(10px, 11cqi, 22px); }
+.mole .sign.letter { font-size: clamp(20px, 26cqi, 52px); line-height: 1; }
 
 /* 구멍 앞 턱 (두더지 하단을 가림) */
 .hole .lip {

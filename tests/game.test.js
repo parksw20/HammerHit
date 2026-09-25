@@ -2,7 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { WORDS } = require('../js/words.js');
-const { pickDistractors, pickAnswer, createQuestion } = require('../js/questions.js');
+const { LETTERS, lettersInRange } = require('../js/letters.js');
+const { pickDistractors, pickAnswer, createQuestion, labelFor } = require('../js/questions.js');
 const { Progress } = require('../js/progress.js');
 const { GameEngine, comboMultiplier } = require('../js/engine.js');
 
@@ -76,7 +77,8 @@ test('문제: 모드에 따라 프롬프트가 바뀐다', () => {
   const apple = byId('apple');
   assert.equal(createQuestion('meaning', apple, WORDS, 2, { rng }).prompt, '사과');
   const listen = createQuestion('listen', apple, WORDS, 2, { rng });
-  assert.equal(listen.prompt, 'apple');
+  assert.equal(listen.prompt, '🔊');
+  assert.equal(listen.speakText, 'apple');
   assert.equal(listen.speak, true);
   assert.throws(() => createQuestion('nope', apple, WORDS, 2, { rng }));
 });
@@ -218,6 +220,96 @@ test('엔진: 복습 라운드처럼 풀이 한 단어뿐이어도 계속 출제
   for (let i = 0; i < 5; i++) {
     const q = untilQuestion(engine);
     assert.equal(q.answer.id, 'grape');
+    engine.hit(q.answerIndex);
+  }
+});
+
+// ── 알파벳 ─────────────────────────────
+const L = (c) => LETTERS.find((w) => w.en === c);
+
+test('알파벳: 26자, 범위, 헷갈리는 글자가 실제 글자를 가리킨다', () => {
+  assert.equal(LETTERS.length, 26);
+  assert.deepEqual(lettersInRange('am').map((w) => w.en).join(''), 'ABCDEFGHIJKLM');
+  assert.deepEqual(lettersInRange('nz').map((w) => w.en).join(''), 'NOPQRSTUVWXYZ');
+  assert.equal(new Set(LETTERS.map((w) => w.ko)).size, 26);
+  const ids = new Set(LETTERS.map((w) => w.id));
+  for (const w of LETTERS) {
+    for (const id of w.shape.concat(w.sound)) assert.ok(ids.has(id) && id !== w.id, `${w.en} → ${id}`);
+  }
+  assert.ok(L('B').shape.includes('letter:D'));
+  assert.ok(L('B').sound.includes('letter:P'));
+});
+
+test('대소문자: 프롬프트와 팻말은 서로 다른 대소문자, 모양이 비슷한 글자가 오답으로', () => {
+  const rng = seeded(7);
+  let sawUpperPrompt = false, sawLowerPrompt = false;
+  for (let i = 0; i < 40; i++) {
+    const q = createQuestion('case', L('b'.toUpperCase()), LETTERS, 3, { rng, similarity: 1 });
+    if (q.prompt === 'B') { sawUpperPrompt = true; assert.equal(q.display, 'lower'); }
+    else { assert.equal(q.prompt, 'b'); sawLowerPrompt = true; assert.equal(q.display, 'upper'); }
+    assert.ok(q.distractors.every((d) => L('B').shape.includes(d.id)), q.distractors.map((d) => d.en).join());
+  }
+  assert.ok(sawUpperPrompt && sawLowerPrompt);
+  assert.equal(labelFor(L('Q'), 'lower'), 'q');
+  assert.equal(labelFor(L('Q'), 'upper'), 'Q');
+});
+
+test('알파벳 소리: 글자 이름을 읽고, 소리가 비슷한 글자가 오답으로', () => {
+  const rng = seeded(8);
+  const q = createQuestion('letterSound', L('B'), LETTERS, 3, { rng, similarity: 1 });
+  assert.equal(q.speakText, 'B');
+  assert.ok(q.distractors.every((d) => L('B').sound.includes(d.id)));
+});
+
+test('순서대로: 앞 글자를 보여주고 바로 앞뒤 글자를 오답으로 섞는다', () => {
+  const rng = seeded(9);
+  const seq = lettersInRange('am');
+  const q = createQuestion('sequence', L('E'), seq, 3, { rng, sequence: seq, sequenceIndex: 4 });
+  assert.equal(q.prompt, 'B C D _');
+  assert.match(q.hint, /5\/13/);
+  assert.equal(q.distractors.length, 3);
+  assert.ok(q.distractors.every((d) => 'CDFG'.includes(d.en)));
+  assert.equal(createQuestion('sequence', L('A'), seq, 2, { rng, sequence: seq, sequenceIndex: 0 }).prompt, '_');
+});
+
+function makeAbc(opts) {
+  return makeEngine(Object.assign({ words: lettersInRange('am'), pool: lettersInRange('am'), level: 'abc' }, opts));
+}
+
+test('엔진(순서대로): 틀리면 같은 글자를 다시, 끝까지 치면 완주 보너스와 함께 끝난다', () => {
+  const pool = lettersInRange('am').slice(0, 3); // A B C
+  const { engine, events } = makeAbc({ mode: 'sequence', pool, duration: 90 });
+  engine.start();
+
+  let q = untilQuestion(engine);
+  assert.equal(q.answer.en, 'A');
+  assert.ok(engine.holes.every((m) => !m || m.label === m.word.en)); // 팻말은 대문자
+  engine.hit(engine.holes.findIndex((m) => m && !m.isAnswer));        // 오답
+  assert.equal(untilQuestion(engine).answer.en, 'A');                 // 같은 글자 다시
+
+  for (const c of 'ABC') {
+    q = untilQuestion(engine);
+    assert.equal(q.answer.en, c);
+    engine.hit(q.answerIndex);
+  }
+  assert.ok(events.some((e) => e.type === 'complete'));
+  const before = engine.score;
+  for (let i = 0; i < 100 && engine.state === 'running'; i++) engine.tick(0.05);
+  assert.equal(engine.state, 'ended');
+  const summary = events.find((e) => e.type === 'end').payload;
+  assert.equal(summary.completed, true);
+  assert.ok(summary.bonus > 0);
+  assert.equal(summary.score, before);
+  assert.deepEqual(summary.wrongWords.map((w) => w.en), ['A']);
+});
+
+test('엔진(대소문자): 팻말 라벨이 문제의 대소문자 방향을 따른다', () => {
+  const { engine } = makeAbc({ mode: 'case' });
+  engine.start();
+  for (let i = 0; i < 10; i++) {
+    const q = untilQuestion(engine);
+    for (const m of engine.holes.filter(Boolean)) assert.equal(m.label, labelFor(m.word, q.display));
+    assert.notEqual(engine.holes[q.answerIndex].label, q.prompt);
     engine.hit(q.answerIndex);
   }
 });
