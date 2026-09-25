@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>HammerHit: 영어 두더지 잡기</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main id="app">
+    <!-- 메뉴 -->
+    <section id="screen-menu" class="screen active">
+      <h1 class="logo">🔨 HammerHit</h1>
+      <p class="tagline">정답 두더지만 때려라!</p>
+
+      <div class="group">
+        <h2>모드</h2>
+        <div class="choices" data-choice="mode">
+          <button data-value="meaning">📖 뜻 찾기<small>한국어 뜻 → 영어 단어</small></button>
+          <button data-value="listen">🔊 듣고 찾기<small>영어 발음 → 영어 단어</small></button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>레벨</h2>
+        <div class="choices" data-choice="level">
+          <button data-value="1">🌱 Level 1<small>동물 · 과일 · 색 · 숫자</small></button>
+          <button data-value="2">🌿 Level 2<small>몸 · 학교 · 자연 · 탈것</small></button>
+          <button data-value="3">🌳 Level 3<small>동사 · 형용사 · 장소</small></button>
+        </div>
+      </div>
+
+      <button id="btn-start" class="primary">게임 시작</button>
+      <p id="menu-stats" class="stats"></p>
+      <p class="hint">⌨️ 숫자패드 1~9로 두더지 치기 · Space 다시 듣기 · Esc 일시정지</p>
+      <button id="btn-reset" class="link">학습 기록 초기화</button>
+    </section>
+
+    <!-- 게임 -->
+    <section id="screen-game" class="screen">
+      <header class="hud">
+        <div class="hud-item"><span class="hud-label">점수</span><span id="hud-score">0</span></div>
+        <div class="hud-item combo" id="hud-combo"></div>
+        <div class="hud-item"><span class="hud-label">시간</span><span id="hud-time">60</span></div>
+        <div class="hud-buttons">
+          <button id="btn-mute" class="icon" aria-label="소리 끄기">🔈</button>
+          <button id="btn-pause" class="icon" aria-label="일시정지">⏸</button>
+        </div>
+      </header>
+      <div class="timebar"><div id="timebar-fill"></div></div>
+
+      <div class="prompt-box">
+        <div id="prompt-label" class="prompt-label"></div>
+        <div id="prompt" class="prompt"></div>
+        <button id="btn-replay" class="replay hidden">🔊 다시 듣기</button>
+        <div class="qbar"><div id="qbar-fill"></div></div>
+        <div id="feedback" class="feedback"></div>
+      </div>
+
+      <div id="board" class="board"></div>
+
+      <div id="pause-overlay" class="overlay hidden">
+        <div class="overlay-card">
+          <h2>일시정지</h2>
+          <button id="btn-resume" class="primary">계속하기</button>
+          <button id="btn-quit" class="secondary">그만하기</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 결과 -->
+    <section id="screen-result" class="screen">
+      <h2 id="result-title" class="result-title">라운드 종료!</h2>
+      <div class="result-score"><span id="result-score">0</span><span id="result-best" class="badge hidden">NEW BEST!</span></div>
+      <div class="result-stats">
+        <div><span id="result-accuracy">0%</span><small>정답률</small></div>
+        <div><span id="result-correct">0/0</span><small>맞힌 문제</small></div>
+        <div><span id="result-combo">0</span><small>최고 콤보</small></div>
+      </div>
+      <div class="wrong-box">
+        <h3>📒 오답 노트</h3>
+        <ul id="wrong-list" class="wrong-list"></ul>
+      </div>
+      <div class="result-buttons">
+        <button id="btn-review" class="primary">틀린 단어 복습</button>
+        <button id="btn-again" class="secondary">다시 하기</button>
+        <button id="btn-menu" class="secondary">메뉴로</button>
+      </div>
+    </section>
+  </main>
+
+  <script src="js/words.js"></script>
+  <script src="js/questions.js"></script>
+  <script src="js/progress.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
